@@ -1,0 +1,1 @@
+# mule-multi-batch-aggregation
