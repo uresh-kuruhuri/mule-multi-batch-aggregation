@@ -1,0 +1,17 @@
+{
+	"aggregateFileData": {
+		"processes": {
+			"processA": {
+				"filedir": "F:/temp/",
+				"filename": "user_data_10K_1",
+				"extn": "csv"
+			},
+			"processB": {
+				"filedir": "F:/temp/",
+				"filename": "user_data_10K_2",
+				"extn": "csv"
+			}
+		},
+		"destination" : "F:/temp/batch-multifile-agg/"
+	}
+}
