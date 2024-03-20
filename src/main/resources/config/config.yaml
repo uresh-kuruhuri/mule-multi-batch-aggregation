@@ -1,0 +1,3 @@
+batch:
+  blockSize: "1000"
+  aggSize: "1000"

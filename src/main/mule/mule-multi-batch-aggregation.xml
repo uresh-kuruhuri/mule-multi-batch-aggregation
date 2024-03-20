@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule
+	xmlns:compression="http://www.mulesoft.org/schema/mule/compression"
+	xmlns:aggregators="http://www.mulesoft.org/schema/mule/aggregators"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:file="http://www.mulesoft.org/schema/mule/file"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+	http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+	http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+	http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+	http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+	http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+	http://www.mulesoft.org/schema/mule/aggregators http://www.mulesoft.org/schema/mule/aggregators/current/mule-aggregators.xsd
+	http://www.mulesoft.org/schema/mule/compression http://www.mulesoft.org/schema/mule/compression/current/mule-compression.xsd">
+	<flow
+		name="mule-multi-batch-aggregationFlow"
+		doc:id="ce7676c0-9c29-4538-8556-d0cfd5dc0a9e">
+		<scheduler
+			doc:name="Scheduler"
+			doc:id="9e08e2e1-dabd-4e11-955c-924e664f22b8">
+			<scheduling-strategy>
+				<cron
+					expression="0 0 1 ? * * *"
+					timeZone='"America/New_York"' />
+			</scheduling-strategy>
+		</scheduler>
+		<file:read
+			doc:id="49e97855-2508-48f6-9b37-61cab6bbb00b"
+			path="${app.home}/config/batch-config.json"
+			doc:name="batchconfig" />
+		<ee:transform
+			doc:name="processes, noOfProcs, destination, uuid"
+			doc:id="920fbbf7-595a-4e8b-b40e-de23c72b8482">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="processes"><![CDATA[%dw 2.0
+output application/json
+---
+payload.aggregateFileData.processes]]></ee:set-variable>
+				<ee:set-variable variableName="noOfProcs"><![CDATA[%dw 2.0
+output application/json
+---
+sizeOf(payload.aggregateFileData.processes)]]></ee:set-variable>
+				<ee:set-variable variableName="uuid"><![CDATA[%dw 2.0
+output application/java
+---
+uuid()]]></ee:set-variable>
+				<ee:set-variable variableName="destDir"><![CDATA[%dw 2.0
+output application/java
+---
+payload.aggregateFileData.destination]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger
+			level="INFO"
+			doc:name="Logger"
+			doc:id="151a8ea2-cd04-4f58-9d09-796fe1a67ca3"
+			message='#[output text/plain&#10;---&#10;vars.uuid ++ "|" ++ vars.noOfProcs ++ "|" ++ (keysOf(vars.processes ) reduce ((item, acc = "") -&gt; acc ++"|"++ item))]' />
+		<file:list
+			doc:name="destDir"
+			doc:id="5cc48151-6d97-49ea-ba47-d6f8749990e3"
+			directoryPath="#[vars.destDir]" />
+		<parallel-foreach
+			doc:name="Parallel For Each"
+			doc:id="881d33b7-72d2-4f82-b847-86cc9f091512"
+			collection="#[payload]"
+			maxConcurrency="2">
+			<file:delete
+				doc:name="clear destDir"
+				doc:id="b03fa6ac-21a4-453f-a7cb-f81da631841a"
+				path='#[attributes.path]' />
+		</parallel-foreach>
+		<foreach
+			doc:name="For Each - process"
+			doc:id="0c869e79-4247-48ae-bc2b-65fe351301ff"
+			collection="#[keysOf(vars.processes)]">
+			<ee:transform
+				doc:name="process"
+				doc:id="32167a4c-20c4-48ae-a263-fd8806b22240">
+				<ee:message>
+				</ee:message>
+				<ee:variables>
+					<ee:set-variable variableName="process"><![CDATA[%dw 2.0
+output application/java
+---
+vars.processes[payload]]]></ee:set-variable>
+					<ee:set-variable variableName="processKey"><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<ee:transform
+				doc:name="file atts"
+				doc:id="73c82e08-c664-4a82-a041-348004c70e85">
+				<ee:message />
+				<ee:variables>
+					<ee:set-variable variableName="fileToProcess"><![CDATA[%dw 2.0
+output application/java
+---
+vars.process.filedir ++ vars.process.filename ++ "." ++ vars.process.extn]]></ee:set-variable>
+					<ee:set-variable variableName="filename"><![CDATA[%dw 2.0
+output application/java
+---
+vars.process.filename]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<file:read
+				doc:name="Read"
+				doc:id="5452f7c7-c4ba-45c1-9ab6-c243ed622c60"
+				path="#[vars.fileToProcess]" />
+			<flow-ref
+				doc:name="batch-flow"
+				doc:id="0ae34e0c-afc9-443a-9b3e-59140ce77569"
+				name="batch-flow" />
+		</foreach>
+	</flow>
+	<flow
+		name="batch-flow"
+		doc:id="dfbbdee0-dfb3-44ae-8e85-33fd2add5788">
+		<batch:job
+			jobName="file-process-batch-job"
+			doc:id="98efc85f-1d29-4c3f-b5a8-07ec7a9919d5"
+			blockSize="${batch.blockSize}">
+			<batch:process-records>
+				<batch:step
+					name="Batch_Step"
+					doc:id="1ccb21d9-af64-4cd3-812c-3f72f6affa80">
+					<batch:aggregator
+						doc:name="Batch Aggregator"
+						doc:id="13865e7d-d564-4b83-8cce-d87fefbab639"
+						size="${batch.aggSize}" preserveMimeTypes="true">
+						<os:retrieve
+							doc:name="counter"
+							doc:id="3fbbbe80-b2b6-450f-accf-2ea41a9dec34"
+							key='#[vars.processKey ++ "_counter"]'
+							target="fileCounter">
+						<os:default-value><![CDATA[0]]></os:default-value>
+					</os:retrieve>
+						<logger
+							level="INFO"
+							doc:name="counter before updating"
+							doc:id="c2188687-eb96-4577-880f-2d1e95d63859"
+							message="#[vars.fileCounter]" />
+						<set-variable
+							value="#[vars.fileCounter + 1]"
+							doc:name="fileCounter"
+							doc:id="c10514fe-ceb1-4cde-b6b1-8b2d474a20b5"
+							variableName="fileCounter" />
+						<logger
+							level="INFO"
+							doc:name="counter after updating"
+							doc:id="55ccfdb2-c0bf-491f-95e1-3bcd75ceee19"
+							message="#[vars.fileCounter]" />
+						<os:store
+							doc:name="counter"
+							doc:id="26b57435-f471-45fe-b7e6-67468719f6d8"
+							key='#[vars.processKey ++ "_counter"]'>
+						<os:value><![CDATA[#[vars.fileCounter]]]></os:value>
+					</os:store>
+						<ee:dynamic-evaluate
+							doc:name="Dynamic Evaluate"
+							doc:id="ea239323-fe57-4db4-aa38-39579f731321"
+							expression='#[readUrl("classpath://dwl/" ++ vars.processKey ++ ".dwl", "text/plain")]'>
+					</ee:dynamic-evaluate>
+						<ee:transform doc:name="fileToWrite" doc:id="cf0a6709-5d6f-44db-b38e-e3e572df1080">
+						<ee:message>
+						</ee:message>
+						<ee:variables>
+							<ee:set-variable variableName="fileToWrite"><![CDATA[%dw 2.0
+output application/java
+---
+vars.destDir ++ vars.filename ++ "_" ++ vars.fileCounter ++ ".CSV"]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+						<logger
+							level="INFO"
+							doc:name="before writing file"
+							doc:id="1b3310b2-12be-4fef-9e22-4b2f8b20d5d6"
+							message="writing to file| #[vars.fileToWrite]" />
+						<file:write
+							doc:name="Write"
+							doc:id="3f4908b8-5b7c-45f7-8394-7adcee08d157"
+							path="#[vars.fileToWrite]" >
+						</file:write>
+						<set-variable
+							value=""
+							doc:name="fileToWrite empty"
+							doc:id="62c812e7-4b43-40dd-bb67-35d666ce42f0"
+							variableName="fileToWrite" />
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<ee:transform
+					doc:name="Transform Message"
+					doc:id="ed6860ee-5070-4081-b948-20ce4bb40ba6">
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output text/plain
+---
+"COMPLETED|" ++ vars.processKey]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger
+					level="INFO"
+					doc:name="batch complete"
+					doc:id="faad5385-8961-4ca4-9921-760aff0cdf91"
+					message="#[payload]" />
+				<os:store
+					doc:name="reset counter"
+					doc:id="e5b95a1b-984b-4c20-b90d-ba6212a92083"
+					key='#[vars.processKey ++ "_counter"]'>
+					<os:value><![CDATA[#[0]]]></os:value>
+				</os:store>
+				<flow-ref
+					doc:name="multi-batch-aggregation-flow"
+					doc:id="c1b00238-4c13-4cc5-8c46-0fcfbaf77fe7"
+					name="multi-batch-aggregation-flow" />
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+	<flow
+		name="multi-batch-aggregation-flow"
+		doc:id="a3a8d644-058d-49c2-94aa-e53801c40b99">
+		<aggregators:group-based-aggregator
+			doc:name="multi-batch-aggregator"
+			doc:id="6239a843-b76b-4a28-850c-60889ee7a708"
+			groupSize="#[vars.noOfProcs]"
+			groupId="#[vars.uuid]"
+			name="multi-batch-aggregator">
+			<aggregators:incremental-aggregation>
+				<logger
+					level="INFO"
+					doc:name="batch in progress"
+					doc:id="2564e788-0f17-4a0d-a07f-68bfd2d86db2"
+					message="Batch still in progress" />
+			</aggregators:incremental-aggregation>
+			<aggregators:aggregation-complete >
+				<logger
+					level="INFO"
+					doc:name="all complete"
+					doc:id="74e47783-3473-4704-a024-e2720af3b43c"
+					message="all batches complete. proceed to archive." />
+				<flow-ref
+					doc:name="compress-all-into-one-file-subflow"
+					doc:id="0e5e3567-ebc1-4171-acfa-89345d897f3d"
+					name="compress-all-into-one-file-subflow" />
+			</aggregators:aggregation-complete>
+		</aggregators:group-based-aggregator>
+	</flow>
+	<sub-flow
+		name="compress-all-into-one-file-subflow"
+		doc:id="70220114-e5c1-4deb-85ec-a75883bfd689">
+		<file:list
+			doc:name="destDir"
+			doc:id="eef66c34-e569-4a0a-8f36-cc0f11a1e546"
+			directoryPath="#[vars.destDir]" />
+		<ee:transform doc:name="archive payload" doc:id="064a9116-fa29-4158-8f4e-2f0ad7b84735" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+(0 to sizeOf(payload) - 1) as Array 
+	reduce (index, acc={}) -> acc ++ {
+	(payload[index].attributes.fileName): payload[index].payload
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<compression:archive
+			doc:name="Archive"
+			doc:id="63234853-22af-40d4-9b97-061eee9ba544">
+			<compression:archiver >
+				<compression:zip-archiver />
+			</compression:archiver>
+		</compression:archive>
+		<file:write
+			doc:name="zip file"
+			doc:id="6c8c56c3-4b72-4430-9dee-a56e549df129"
+			path='#[vars.destDir ++ "final.zip"]' />
+		<logger
+			level="INFO"
+			doc:name="complete"
+			doc:id="b0db17a6-28be-47db-9964-aaef497346b7"
+			message="Process is now complete" />
+	</sub-flow>
+</mule>
