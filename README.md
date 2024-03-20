@@ -1,7 +1,7 @@
 # mule-multi-batch-aggregation
 
 ## Overview
-This mule application is a proof-of-concept (PoC) for an unique use case that I had to work for an esteemed client in the past.
+This mule application is a proof-of-concept (PoC) for a unique use case that I had to work for an esteemed client in the past.
 
 ## Use case
 - Data from multiple source systems (say A, B) have to be processed and sent to a target system (C). In the real use case, system A has been a data warehouse, system B was data from a SFTP source.
